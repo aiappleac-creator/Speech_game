@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>聲能傳奇</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        *{box-sizing:border-box}
+        body{background:#0a0f1a;font-family:'Segoe UI',monospace;margin:0;padding:20px;background-image:linear-gradient(rgba(18,24,58,0.3) 1px,transparent 1px),linear-gradient(90deg,rgba(18,24,58,0.3) 1px,transparent 1px);background-size:24px 24px}
+        .jrpg-window{background:linear-gradient(180deg,#0c1242 0,#03051c 100%);border:4px solid #fff;box-shadow:0 0 0 4px #02030a,0 10px 20px rgba(0,0,0,.8),inset 0 0 12px rgba(255,255,255,.2);border-radius:12px}
+        .jrpg-window-gold{background:linear-gradient(180deg,#1b1633 0,#080517 100%);border:4px solid #dfa522;box-shadow:0 0 0 4px #02030a,0 10px 20px rgba(0,0,0,.8),inset 0 0 12px rgba(223,165,34,.2);border-radius:12px}
+        .pixel-font{font-family:monospace}
+        .scanlines::before{content:" ";position:absolute;inset:0;background:linear-gradient(rgba(18,16,16,0) 50%,rgba(0,0,0,0.15) 50%);background-size:100% 4px;pointer-events:none;z-index:1000}
+        @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}}
+        .shake{animation:shake 0.2s ease-in-out}
+        @keyframes damage-float{0%{transform:translateY(0);opacity:1}100%{transform:translateY(-60px);opacity:0}}
+        .damage-popup{animation:damage-float 0.6s ease-out forwards;position:absolute;font-weight:bold;color:red;text-shadow:1px 1px 0 black;z-index:30}
+        .lightning-effect{position:absolute;inset:0;background:rgba(255,255,200,0.8);opacity:0;pointer-events:none;transition:opacity 0.05s;display:flex;align-items:center;justify-content:center;font-size:3rem;z-index:20}
+        .monster-card{background:#1e293b;border-radius:1.5rem;padding:1rem;width:160px;text-align:center;border:2px solid #475569;position:relative}
+        .monster-card.boss{border-color:#c084fc;background:#2e1a4a}
+        .monster-card.finisher-mode{border-color:#ff4444;box-shadow:0 0 12px red;animation:pulse 0.8s infinite}
+        @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,0,0,0.4)}70%{box-shadow:0 0 0 10px rgba(255,0,0,0)}100%{box-shadow:0 0 0 0 rgba(255,0,0,0)}}
+        .finisher-tag{font-size:0.7rem;background:#ff4444;color:white;border-radius:20px;padding:2px 6px;margin-top:6px;display:inline-block}
+        .hp-bar-bg{background:#334155;height:10px;border-radius:10px;margin-top:8px}
+        .hp-bar{background:#ef4444;height:100%;width:100%;border-radius:10px;transition:width 0.2s}
+        .boss .hp-bar{background:#c084fc}
+        .detected-panel{background:#000000aa;backdrop-filter:blur(4px);border-radius:20px;padding:4px 12px;color:#ffd966;border:1px solid gold}
+        .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#facc15;color:black;padding:8px 16px;border-radius:40px;font-weight:bold;z-index:2000;animation:fadeOut 2s forwards}
+        @keyframes fadeOut{0%{opacity:1}70%{opacity:1}100%{opacity:0;visibility:hidden}}
+        .forest-track{background-color:#101c13;background-image:linear-gradient(90deg,rgba(26,45,30,0.4) 1px,transparent 1px);background-size:40px 100%}
+        .obstacle-large{font-size:5rem;transition:all 0.2s;display:flex;flex-direction:column;align-items:center}
+        .obstacle-text{font-size:0.8rem;background:rgba(0,0,0,0.6);padding:2px 6px;border-radius:20px;margin-top:4px}
+        .mpt-lock{transition:all 0.3s}
+        .mpt-lock.unlocked{filter:drop-shadow(0 0 8px lime);opacity:0.7}
+        .success-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:3000;display:flex;align-items:center;justify-content:center;flex-direction:column;animation:fadeIn 0.3s}
+        .success-card{background:linear-gradient(145deg,#facc15,#f59e0b);border-radius:2rem;padding:2rem;text-align:center;border:4px solid white;box-shadow:0 0 30px gold;animation:bounceIn 0.5s}
+        @keyframes bounceIn{0%{transform:scale(0.3);opacity:0}80%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
+        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        .firework{position:fixed;width:10px;height:10px;border-radius:50%;pointer-events:none;z-index:3500;animation:explode 1s ease-out forwards}
+        @keyframes explode{0%{transform:scale(0);opacity:1}100%{transform:scale(30);opacity:0}}
+        .hexagon-icon{display:inline-block;width:40px;height:40px;background:#fbbf24;clip-path:polygon(25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%);text-align:center;line-height:40px;font-size:24px;vertical-align:middle;box-shadow:0 0 6px gold}
+        .battle-arena{background-color:#1b2614;background-image:radial-gradient(#3a4f29 15%,transparent 16%),radial-gradient(#2b3b1e 15%,transparent 16%);background-size:24px 24px;background-position:0 0,12px 12px}
+        .cursor-blink::after{content:'▼';animation:blink 0.8s infinite;margin-left:6px;color:#f59e0b}
+        @keyframes blink{50%{opacity:0}}
+        .animate-float{animation:float-slow 2s ease-in-out infinite}
+        @keyframes float-slow{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+        .animate-walk{animation:walk-bob 0.5s linear infinite}
+        @keyframes walk-bob{0%,100%{transform:translateY(0)}25%{transform:translateY(-4px)}75%{transform:translateY(-4px)}}
+        .food-glow{filter:drop-shadow(0 0 12px gold);animation:float-slow 0.5s ease-out}
+        .big-emotion-btn{font-size:1.2rem !important;padding:0.75rem !important}
+        .big-emotion-btn span{font-size:2rem;display:block;margin-bottom:0.25rem}
+        .big-mpt-btn{font-size:1rem !important;padding:0.75rem 1rem !important}
+        .big-mpt-btn .text-base{font-size:1.2rem !important}
+        /* 寶箱開啟動畫 */
+        @keyframes chestPop {
+            0% { transform: scale(1); filter: drop-shadow(0 0 0 gold);}
+            50% { transform: scale(1.3) rotate(5deg); filter: drop-shadow(0 0 20px gold);}
+            100% { transform: scale(1) rotate(0deg); filter: drop-shadow(0 0 10px orange);}
+        }
+        .chest-open-animation {
+            animation: chestPop 0.6s cubic-bezier(0.34, 1.2, 0.64, 1) forwards !important;
+        }
+        /* 通關畫面全白文字 */
+        #screen-report .report-card-text, 
+        #screen-report p, 
+        #screen-report span, 
+        #screen-report h5, 
+        #screen-report div:not(.bg-slate-950/95) {
+            color: #f8fafc !important;
+        }
+        #screen-report .bg-slate-950/95 {
+            background-color: #0f172aee !important;
+            border-color: #facc15 !important;
+        }
+        #screen-report .text-xs, #screen-report .text-white {
+            color: #ffffff !important;
+        }
+        /* 隱藏所有錄影相關元素 */
+        #face-canvas, #face-video, #raw-canvas, #raw-video { display: none; }
+    </style>
+</head>
+<body class="scanlines relative">
+<header class="bg-slate-950 border-b-4 border-amber-500 p-4 shadow-xl z-50 relative">
+    <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-3">
+        <div><h1 class="text-xl font-black text-amber-400 pixel-font jrpg-text-shadow">聲能傳奇</h1></div>
+        <div class="flex items-center space-x-4 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700">
+            <div class="flex items-center gap-1.5"><span id="mic-status" class="w-3 h-3 rounded-full bg-red-600 animate-pulse"></span><span id="mic-text" class="text-[11px] text-slate-300">魔音笛</span></div>
+            <div class="detected-panel pixel-font"><i class="fa-solid fa-microphone-alt"></i> <span id="detected-word-display">等待語音...</span><span id="word-count-display" class="bg-orange-600 rounded-full px-2 ml-2 text-xs">0</span></div>
+        </div>
+    </div>
+</header>
+<main class="flex-grow flex items-center justify-center p-4 max-w-6xl mx-auto w-full z-20">
+    <!-- 序章 -->
+    <div id="screen-prologue" class="w-full max-w-3xl jrpg-window p-6 space-y-6">
+        <h3 class="text-xl md:text-2xl font-black text-amber-400 text-center">~ 冒險序章 ~</h3>
+        <div class="relative h-60 w-full bg-slate-950 rounded-lg border-2 border-slate-700 overflow-hidden">
+            <div class="absolute inset-0 opacity-40 bg-[radial-gradient(#2563eb_1px,transparent_1px)] [background-size:16px_16px]"></div>
+            <div class="absolute top-1/2 left-12 transform -translate-y-1/2 text-center z-10"><div class="text-2xl">🏡</div><span class="text-[10px]">勇者之家</span></div>
+            <div class="absolute top-1/3 left-1/2 transform -translate-x-1/2 text-center z-10"><div class="text-2xl animate-bounce">⚡</div><span class="text-[10px] text-red-400">烈焰峽谷</span></div>
+            <div class="absolute top-2/3 right-24 transform -translate-y-1/2 text-center z-10"><div class="text-3xl animate-pulse">👑📦</div><span class="text-[10px] text-yellow-400">黃金寶箱</span></div>
+            <svg class="absolute inset-0 w-full h-full pointer-events-none"><path d="M 64 120 Q 200 60, 270 90 T 480 150" fill="none" stroke="#f59e0b" stroke-width="3" stroke-dasharray="6,6" /></svg>
+            <div id="prologue-hero" class="absolute text-3xl z-20 transition-all duration-1000" style="left:48px; top:100px;">🧙‍♂️</div>
+        </div>
+        <div class="bg-black/90 border-2 border-slate-600 rounded-lg p-5 min-h-[110px] relative">
+            <span class="absolute -top-3 left-4 bg-blue-900 border border-white px-2.5 py-0.5 rounded text-xs font-black text-white">敘事者</span>
+            <p id="prologue-text" class="text-slate-200 text-sm md:text-base leading-relaxed cursor-blink">正在載入冒險卷軸...</p>
+            <div class="flex justify-end pt-2"><button id="btn-prologue-next" class="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-black text-xs rounded transition-all">下一步</button></div>
+        </div>
+    </div>
+
+    <!-- 第一關 -->
+    <div id="screen-stage1" class="hidden w-full max-w-4xl jrpg-window border-red-500 p-5 relative">
+        <div class="flex justify-between items-center mb-3 border-b-2 border-red-900 pb-2"><div><span class="text-xs font-black text-red-400">[ BATTLE ]</span><h3 class="text-lg font-black text-red-500">烈焰峽谷 ── 泥巴怪突襲</h3></div><div class="bg-red-950/80 text-red-300 px-3 py-1 rounded text-xs font-bold">任務：連續喊同一個字3次 → 雷電攻擊 (2次後需終結技)</div></div>
+        <div class="relative battle-arena rounded-xl p-5 min-h-[260px] flex justify-center border-2 border-red-950 overflow-hidden shadow-inner bg-green-900/30">
+            <div id="s1-damage-container" class="absolute inset-0 pointer-events-none z-30"></div>
+            <div id="lightning-effect" class="lightning-effect absolute inset-0 bg-white opacity-0 pointer-events-none z-20 flex items-center justify-center"><span class="text-yellow-500 text-6xl font-black"><i class="fa-solid fa-bolt mr-2"></i>雷擊</span></div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-3xl items-end relative z-10" id="stage1-monsters-container"></div>
+        </div>
+        <div class="jrpg-window-gold p-3.5 mt-3.5 space-y-3">
+            <div class="flex justify-between items-center"><div><p class="text-xs font-bold text-amber-400">連續喊同一個字3次，2次後需終結技</p></div><div class="flex gap-2"><button id="btn-da" class="px-2 py-1 bg-red-700 text-white text-xs rounded">舌根音 /da/</button><button id="btn-ba" class="px-2 py-1 bg-slate-800 text-slate-300 text-xs rounded">雙唇音 /ba/</button></div></div>
+            <div class="grid grid-cols-2 gap-3 border-t pt-2"><div><div class="flex justify-between text-xs"><span>聲音能量</span><span id="volume-val">0 dB</span></div><div class="w-full bg-slate-950 h-2 rounded-full"><div id="volume-bar" class="h-full bg-gradient-to-r from-red-600 to-yellow-400 w-0"></div></div></div><div><div class="flex justify-between text-xs"><span>連擊速率</span><span id="live-ddk-rate">0.0 次/秒</span></div></div></div>
+        </div>
+        <div class="mt-2 flex justify-between"><div class="flex gap-2"><button id="mockAttackBtn" class="px-2 py-1 bg-slate-700 text-xs rounded">模擬普通攻擊</button><button id="mockFinisher1Btn" class="px-2 py-1 bg-slate-700 text-xs rounded">巨光擊</button><button id="mockFinisher2Btn" class="px-2 py-1 bg-slate-700 text-xs rounded">破天斬</button><button id="mockFinisher3Btn" class="px-2 py-1 bg-slate-700 text-xs rounded">閃電波</button></div><button id="btn-skip-s1" class="px-2 py-1 bg-slate-700 text-xs rounded">跳過</button></div>
+    </div>
+
+    <!-- 第二關 -->
+    <div id="screen-stage2" class="hidden w-full max-w-4xl jrpg-window border-emerald-500 p-5 relative">
+        <div class="flex justify-between items-center mb-3 border-b-2 border-emerald-800 pb-2"><div><span class="text-xs font-black text-emerald-400">[ 森林 ]</span><h3 class="text-lg font-black text-emerald-500">迷霧森林</h3></div><div class="bg-emerald-950/80 text-emerald-300 px-3 py-1 rounded text-xs font-bold">清除 <span id="blockage-counter-txt">2 重障礙</span> 再餵食補給</div></div>
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <div class="lg:col-span-7 forest-track rounded-xl p-5 border-2 border-emerald-900 flex flex-col min-h-[320px] relative overflow-hidden">
+                <div id="s2-drop-container" class="absolute inset-0 pointer-events-none z-10"></div>
+                <div class="w-full bg-slate-950/95 rounded-lg p-2.5 z-20"><div class="flex justify-between text-xs"><span>飽食度 (體力)</span><span id="hero-energy-text">0/4</span></div><div class="w-full bg-slate-900 h-3 rounded-full"><div id="hero-energy-bar" class="h-full bg-gradient-to-r from-emerald-500 to-green-400 w-0"></div></div></div>
+                <div class="relative h-32 my-3 w-full flex items-center justify-between border-b border-dashed border-emerald-800/40"><div id="forest-character" class="absolute text-6xl z-20 transition-all duration-700 select-none" style="left:10px; bottom:8px;">🧙‍♂️⚔️</div><div id="forest-active-obstacle" class="absolute obstacle-large z-20 transition-all" style="right:40px; bottom:0px;"></div></div>
+                <div id="forest-obstacle-bubble" class="bg-slate-950/95 border-2 border-dashed border-emerald-500 p-2.5 rounded-lg z-20"><span id="obstacle-title" class="text-[10px] text-emerald-400 font-bold">[ 第一重：巨大岩石 ]</span><p id="obstacle-prompt" class="text-sm font-bold mt-0.5">請連續大聲讀咒語3次：</p><p id="rock-word" class="text-xl font-black text-white text-center bg-emerald-950 py-1.5 rounded">「石頭！石頭！石頭！」</p><div id="spell-counter" class="text-center text-xs text-yellow-300 mt-1">進度:0/3</div></div>
+                <div id="forest-hero-feeding" class="hidden bg-slate-950/95 border-2 border-yellow-500/60 p-3 rounded-lg z-20 text-center"><p class="text-xs text-yellow-400 font-black">💬 障礙清除！請說出食物名 (需要4種不同食物)</p></div>
+                <div class="text-center text-xs text-emerald-400 font-bold mt-2" id="s2-action-guide">請高聲誦讀咒語3次</div>
+            </div>
+            <div class="lg:col-span-5 flex flex-col space-y-4">
+                <div class="jrpg-window-gold p-4"><div class="bg-slate-950 p-3 rounded-lg"><span class="text-[10px] text-amber-500">實時粵語解碼:</span><p id="stt-realtime-output" class="text-sm text-white font-black mt-1">「等待語音...」</p></div><div><span class="text-xs font-bold">召喚紀錄 (<span id="foodCountDisplay">0</span>/4)：</span><div id="summoned-foods-list" class="flex flex-wrap gap-1 mt-1"><span class="text-xs bg-slate-950 border text-slate-500 px-2 py-1 rounded">尚無</span></div></div></div>
+                <div class="flex gap-2"><button id="btn-force-break-rock" class="flex-1 py-2 bg-emerald-800 text-white text-xs rounded">手動清除</button><button id="btn-force-feed" class="flex-1 py-2 bg-teal-800 text-white text-xs rounded">手動餵食</button></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 第三關 -->
+    <div id="screen-stage3" class="hidden w-full max-w-4xl jrpg-window border-blue-500 p-5 relative">
+        <div class="flex justify-between items-center mb-3 border-b-2 border-blue-800 pb-2"><div><span class="text-xs font-black text-blue-400">[ 營地 ]</span><h3 class="text-lg font-black text-blue-500">幫助5位旅人</h3></div><div class="bg-blue-950/80 text-blue-300 px-3 py-1 rounded text-xs font-bold">進度：<span id="npc-progress-text">1/5</span></div></div>
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <div class="lg:col-span-7 bg-gradient-to-b from-slate-950 to-blue-950/30 rounded-xl p-4 border-2 border-blue-900 flex flex-col"><div class="flex items-center gap-3 bg-slate-950/95 p-3 rounded-xl"><div id="npc-avatar" class="text-5xl">👵</div><div><span id="npc-role" class="text-[10px] font-black text-blue-400 bg-blue-950 px-2 py-0.5 rounded-full">迷路的老奶奶</span><h4 id="npc-name" class="text-base font-black text-white">陳婆婆</h4></div></div><div class="bg-slate-950 border-l-4 border-blue-500 p-3 rounded-r my-3"><span class="text-[10px] text-blue-400 font-black">旅人的訴求：</span><p id="npc-speech" class="text-sm font-bold text-slate-100">「我和我的女兒走散了…」</p><button id="btn-play-npc-speech" class="mt-1 px-2 py-1 bg-slate-900 text-blue-300 text-[11px] rounded">🔊 語音</button></div><div class="text-center text-[10px]">第一步：選情緒。第二步：選回應。</div></div>
+            <div class="lg:col-span-5 space-y-4">
+                <div id="s3-step-emotion" class="jrpg-window-gold p-4"><span class="text-xs font-black text-amber-400">第一步：辨識情緒</span>
+                    <div class="grid grid-cols-2 gap-3 mt-2">
+                        <button class="btn-emotion bg-slate-950 hover:bg-slate-800 text-slate-100 py-4 rounded-xl border border-slate-700 font-bold text-lg transition-all flex flex-col items-center gap-2 big-emotion-btn" data-emotion="驚慌"><span class="text-4xl">😨</span><span>驚慌/害怕</span></button>
+                        <button class="btn-emotion bg-slate-950 hover:bg-slate-800 text-slate-100 py-4 rounded-xl border border-slate-700 font-bold text-lg transition-all flex flex-col items-center gap-2 big-emotion-btn" data-emotion="傷心"><span class="text-4xl">😭</span><span>傷心/難過</span></button>
+                        <button class="btn-emotion bg-slate-950 hover:bg-slate-800 text-slate-100 py-4 rounded-xl border border-slate-700 font-bold text-lg transition-all flex flex-col items-center gap-2 big-emotion-btn" data-emotion="生氣"><span class="text-4xl">😡</span><span>生氣/憤怒</span></button>
+                        <button class="btn-emotion bg-slate-950 hover:bg-slate-800 text-slate-100 py-4 rounded-xl border border-slate-700 font-bold text-lg transition-all flex flex-col items-center gap-2 big-emotion-btn" data-emotion="焦慮"><span class="text-4xl">😟</span><span>焦慮/擔憂</span></button>
+                    </div>
+                    <div id="emotion-error-msg" class="text-xs text-red-400 text-center mt-2 hidden">❌ 情緒不對，再試一次！</div>
+                </div>
+                <div id="s3-step-dialogue" class="hidden jrpg-window-gold p-4"><span class="text-xs font-black text-green-400">第二步：選擇最貼心的回應</span><div id="dialogue-options-container" class="space-y-2 mt-2"></div><div id="dialogue-error-msg" class="text-xs text-red-400 text-center mt-2 hidden"></div></div>
+                <button id="btn-force-npc-next" class="w-full py-2 bg-blue-800 text-white text-xs rounded">手動跳過</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 第四關 -->
+    <div id="screen-stage4" class="hidden w-full max-w-4xl jrpg-window border-yellow-500 p-5 relative">
+        <div class="flex justify-between items-center mb-3 border-b-2 border-yellow-800 pb-2"><div><span class="text-xs font-black text-yellow-400">[ 祭壇 ]</span><h3 class="text-lg font-black text-yellow-500">終極開箱</h3></div><div class="bg-yellow-950/80 text-yellow-300 px-3 py-1 rounded text-xs font-bold">點擊元素後，持續發聲5秒解鎖</div></div>
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
+            <div class="lg:col-span-7 bg-gradient-to-b from-yellow-950/20 to-slate-950/95 rounded-xl p-5 border-2 border-yellow-900 flex flex-col items-center min-h-[300px] relative"><div id="chest-holy-light" class="absolute inset-0 bg-yellow-400/5 opacity-0 transition-opacity rounded-xl"></div><div class="flex gap-2 z-20"><span id="lock-fire" class="mpt-lock bg-red-950/90 text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full border border-red-700"><i class="fa-solid fa-lock mr-1"></i>烈焰</span><span id="lock-wind" class="mpt-lock bg-sky-950/90 text-sky-400 text-[10px] font-black px-2 py-0.5 rounded-full"><i class="fa-solid fa-lock mr-1"></i>颶風</span><span id="lock-thunder" class="mpt-lock bg-purple-950/90 text-purple-400 text-[10px] font-black px-2 py-0.5 rounded-full"><i class="fa-solid fa-lock mr-1"></i>雷神</span></div><div class="my-4 text-center"><div id="chest-emoji" class="text-8xl animate-float">🔒📦</div><p id="chest-status-text" class="text-xs font-bold text-amber-300 mt-1 bg-slate-950/95 px-2 py-0.5 rounded">需解鎖三個印記</p></div><div class="w-full bg-slate-950 rounded border border-yellow-800/60 p-2.5"><div class="flex justify-between text-xs font-bold text-yellow-400 mb-1"><span>⚡ 充能進度</span><span id="mpt-progress-text">點擊元素後開始</span></div><div class="w-full bg-slate-900 h-4 rounded overflow-hidden"><div id="mpt-progress-bar" class="h-full bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 w-0"></div></div></div></div>
+            <div class="lg:col-span-5 space-y-4">
+                <div class="jrpg-window-gold p-4"><span class="text-xs font-black text-yellow-400">選擇元素，持續發聲5秒：</span>
+                    <div class="space-y-3 mt-2">
+                        <button class="btn-mpt-type w-full text-left bg-slate-950 p-4 rounded-xl border-l-4 border-red-500 hover:bg-slate-800 transition-all big-mpt-btn" data-type="fire"><div><span class="text-base font-bold text-red-400">🔥 火元素 (下頜開合)</span><p class="text-sm text-white mt-1">持續發聲：<span class="text-red-400">任意長音</span></p></div><span id="fire-status" class="text-xs text-slate-500 ml-2">未解鎖</span></button>
+                        <button class="btn-mpt-type w-full text-left bg-slate-950 p-4 rounded-xl border-l-4 border-sky-500 hover:bg-slate-800 transition-all big-mpt-btn" data-type="wind"><div><span class="text-base font-bold text-sky-400">🌪️ 風元素 (唇形轉換)</span><p class="text-sm text-white mt-1">持續發聲：<span class="text-sky-400">任意長音</span></p></div><span id="wind-status" class="text-xs text-slate-500 ml-2">未解鎖</span></button>
+                        <button class="btn-mpt-type w-full text-left bg-slate-950 p-4 rounded-xl border-l-4 border-purple-500 hover:bg-slate-800 transition-all big-mpt-btn" data-type="thunder"><div><span class="text-base font-bold text-purple-400">⚡ 雷元素 (展唇微笑)</span><p class="text-sm text-white mt-1">持續發聲：<span class="text-purple-400">任意長音</span></p></div><span id="thunder-status" class="text-xs text-slate-500 ml-2">未解鎖</span></button>
+                    </div>
+                </div>
+                <div class="bg-slate-950 p-2.5 rounded text-center"><div class="flex justify-between text-[10px]"><span>音量:</span><span id="mpt-vol-db">0 dB</span></div><div class="text-xs text-slate-300">持續時間: <span id="mpt-timer-display" class="text-green-400">0.0秒</span></div><p id="mpt-feedback" class="text-[9px] text-slate-400 mt-1">點擊元素後，發出聲音保持5秒</p><button id="mockChargeBtn" class="mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded">🔋 測試充能</button></div>
+                <button id="btn-force-chest" class="w-full py-2 bg-slate-800 text-slate-400 text-xs rounded">手動解鎖全部</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通關畫面 -->
+    <div id="screen-report" class="hidden w-full max-w-5xl jrpg-window border-amber-500 p-5 space-y-6">
+        <div class="text-center"><span class="text-6xl animate-bounce block">🏆</span><h3 class="text-2xl font-black text-yellow-400">恭喜通關！</h3></div>
+        <div class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-slate-950/95 p-3 rounded border-2 border-red-950 report-card-text"><h5 class="text-xs font-black text-red-400">連擊速度</h5><div>速率: <span id="rep-ddk-rate" class="text-white">--</span> 次/秒</div><div>節奏穩定: <span id="rep-ddk-stability" class="text-white">--</span></div></div>
+                <div class="bg-slate-950/95 p-3 rounded border-2 border-emerald-950"><h5 class="text-xs font-black text-emerald-400">美食收藏</h5><div>美食清單: <span id="rep-food-list" class="text-white"></span></div></div>
+                <div class="bg-slate-950/95 p-3 rounded border-2 border-yellow-950"><h5 class="text-xs font-black text-yellow-500">最長音效時間</h5><div>最長持續: <span id="rep-mpt-max" class="text-white">--</span> 秒</div></div>
+                <div class="bg-slate-950/95 p-3 rounded border-2 border-blue-950"><h5 class="text-xs font-black text-blue-400">同理之心</h5><div>情緒判斷: <span id="rep-emotion-acc" class="text-white">--</span></div><div>溫暖回應: <span id="rep-empathy-acc" class="text-white">--</span></div></div>
+            </div>
+            <div class="flex justify-center"><button id="exportReportBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-xl flex items-center gap-2"><i class="fa-solid fa-download"></i> 儲存遊戲記錄 (ZIP)</button></div>
+        </div>
+        <div class="flex justify-end"><button id="btn-restart-game" class="bg-yellow-400 text-slate-950 font-black py-2 px-6 rounded-xl">重新開始</button></div>
+    </div>
+</main>
+<footer class="bg-slate-950/90 text-slate-500 text-[10px] text-center py-3">聲能傳奇</footer>
+<div id="toast-message" class="fixed bottom-6 right-6 bg-slate-950 border-4 border-yellow-500 text-slate-100 px-4 py-3 rounded-lg shadow-2xl transition-all duration-300 transform translate-y-20 opacity-0 z-50"><span id="toast-icon">💡</span><span id="toast-text"></span></div>
+
+<!-- 隱藏媒體 -->
+<canvas id="face-canvas" width="320" height="240"></canvas>
+<video id="face-video" autoplay playsinline muted></video>
+<canvas id="raw-canvas" width="320" height="240"></canvas>
+<video id="raw-video" autoplay playsinline muted></video>
+
+<script>
+    // ================= 全域變數 (所有臨床字眼已移除) =================
+    let state = {
+        currentStage: 'prologue',
+        prologueStepIdx: 0,
+        audioContext: null, analyser: null, mediaStream: null,
+        speechRecognizer: null, isRecognizing: false,
+        evaluation: {
+            ddkHits: [],
+            ddkTimestamps: [],
+            summonedFoods: [], energy: 0,
+            foodReactionTimes: [],
+            obstacleClearTimes: [],
+            emotionCorrect: 0, empathyCorrect: 0,
+            emotionAttempts: 0, empathyAttempts: 0,
+            npcSelections: [],
+            mptFireDuration: 0, mptWindDuration: 0, mptThunderDuration: 0,
+            mptFireUnlocked: false, mptWindUnlocked: false, mptThunderUnlocked: false
+        },
+        stage1Monsters: [
+            { id: 0, name: "泥巴小兵 A", emoji: "👾", hp: 80, maxHp: 80, finisherWord: "巨光擊", defeated: false, finisherMode: false, attackCount: 0 },
+            { id: 1, name: "泥巴大王", emoji: "👹", hp: 100, maxHp: 100, finisherWord: "破天斬", defeated: false, finisherMode: false, attackCount: 0 },
+            { id: 2, name: "泥巴小兵 B", emoji: "👾", hp: 80, maxHp: 80, finisherWord: "閃電波", defeated: false, finisherMode: false, attackCount: 0 }
+        ],
+        stage1LastAttackTime: 0,
+        stage2: {
+            blockageIndex: 0, blockageHits: 0, lastWordTime: 0,
+            blockageStartTime: 0,
+            blockages: [
+                { type: 'rock', emoji: '⛰️', title: '巨大岩石', triggerText: '石頭', word: '「石頭！石頭！石頭！」', display: '⛰️', label: '岩石' },
+                { type: 'wood', emoji: '🌲', title: '倒塌枯木', triggerText: '枯木', word: '「枯木！枯木！枯木！」', display: '🌲', label: '枯木' }
+            ]
+        },
+        mptActiveType: null,
+        mptTimerInterval: null,
+        mptVolumeThreshold: -22,
+        mptVoiceActive: false,
+        mptVoiceStart: 0,
+        mptConfirmCounter: 0,
+        npcList: [
+            { name:"陳婆婆", role:"迷路的老奶奶", avatar:"👵", speech:"我和我的女兒走散了，周圍好黑，我好害怕...", emotion:"驚慌", options:[
+                { text:"「婆婆請不要害怕，我會陪您一起等待，一定能找到女兒的！」", score:10 },
+                { text:"「那您在這裡等，我要趕路了。」", score:2 },
+                { text:"「請不要擋路，快回家吧。」", score:1 }
+            ]},
+            { name:"小志", role:"哭泣的小男孩", avatar:"👦", speech:"我最心愛的玩具寶劍掉下懸崖了，嗚嗚...", emotion:"傷心", options:[
+                { text:"「不要哭，我會幫你找回寶劍，我的冒險繩索很厲害的！」", score:10 },
+                { text:"「一個玩具而已，有什麼好哭的。」", score:2 },
+                { text:"「掉了就算了，再買一把吧。」", score:1 }
+            ]},
+            { name:"張獵人", role:"憤怒的樵夫", avatar:"🧔", speech:"氣死我了！那些泥巴怪竟然把我辛苦劈好的木柴全部扔進河裡！", emotion:"生氣", options:[
+                { text:"「他們太過分了！讓我幫你教訓他們，把木柴拿回來！」", score:10 },
+                { text:"「你再劈一些就好，不要太火爆。」", score:3 },
+                { text:"「泥巴怪很難打，你還是算了吧。」", score:2 }
+            ]},
+            { name:"艾米", role:"發抖的冒險家", avatar:"👩‍🌾", speech:"前面的路段據說有毒霧...我還沒準備好解毒藥草，怎麼辦呢...", emotion:"焦慮", options:[
+                { text:"「不用擔心！我多帶了兩株解毒草，分一些給你，我們一起走！」", score:10 },
+                { text:"「害怕就別去了，回到安全的地方吧。」", score:2 },
+                { text:"「你自己想辦法吧。」", score:1 }
+            ]},
+            { name:"洞穴守衛", role:"孤獨的石頭衛兵", avatar:"🤖", speech:"我已經在這裡站崗三百年了...很久沒有人對我說過一句溫暖的話了。", emotion:"傷心", options:[
+                { text:"「守衛您辛苦了！三百年真的很不容易，謝謝您守護這個洞穴！」", score:10 },
+                { text:"「你只是一塊石頭，不需要講話。」", score:1 },
+                { text:"「哦，那我進去了。」", score:2 }
+            ]}
+        ],
+        currentNpcIdx: 0,
+        currentNpc: null,
+        emotionChosen: false
+    };
+    const foodDatabase = {
+        '燒賣':'🥟','魚蛋':'🍡','咖喱魚蛋':'🍡','蝦餃':'🥟','牛肉球':'🍘','叉燒包':'🥟','腸粉':'🍜','糯米雞':'🍙',
+        '菠蘿包':'🍍🍞','蛋撻':'🥧','奶茶':'🥤','檸檬茶':'🍋','鴛鴦':'☕','西多士':'🍞','豬扒包':'🍔',
+        '花膠雞湯':'🍲✨','鮑魚':'🦪✨','燕窩':'🥛✨','人參雞':'🍲✨','龍蝦':'🦞✨','和牛':'🥩✨',
+        '蘋果':'🍎','香蕉':'🍌','橙':'🍊','西瓜':'🍉','芒果':'🥭','雞蛋仔':'🥚🍪','格仔餅':'🧇','碗仔翅':'🥣🦈','煎釀三寶':'🍢','牛雜':'🐮🍲','車仔麵':'🍜','絲襪奶茶':'🥤','凍檸茶':'🍋🧊','楊枝甘露':'🥭🥥','紅豆冰':'🫘🧊'
+    };
+
+    // ================= 工具函數 (保留原始) =================
+    function showToast(msg, icon='💡'){ let t=document.getElementById('toast-message'); document.getElementById('toast-icon').innerText=icon; document.getElementById('toast-text').innerText=msg; t.classList.remove('translate-y-20','opacity-0'); setTimeout(()=>t.classList.add('translate-y-20','opacity-0'),3000); }
+    function speakCantonese(text){ if(window.speechSynthesis){ window.speechSynthesis.cancel(); let u=new SpeechSynthesisUtterance(text); u.lang='zh-HK'; u.rate=0.95; window.speechSynthesis.speak(u); } }
+    function playThunder(){ if(state.audioContext){ const ctx=state.audioContext; const now=ctx.currentTime; const osc1=ctx.createOscillator(); const gain1=ctx.createGain(); osc1.connect(gain1); gain1.connect(ctx.destination); osc1.frequency.value=1800; gain1.gain.setValueAtTime(0.3,now); gain1.gain.exponentialRampToValueAtTime(0.0001,now+0.15); osc1.start(); osc1.stop(now+0.15); const osc2=ctx.createOscillator(); const gain2=ctx.createGain(); osc2.connect(gain2); gain2.connect(ctx.destination); osc2.frequency.value=120; gain2.gain.setValueAtTime(0.5,now); gain2.gain.exponentialRampToValueAtTime(0.0001,now+0.25); osc2.start(); osc2.stop(now+0.25); } }
+    function playHit(){ if(state.audioContext){ const ctx=state.audioContext; const now=ctx.currentTime; const osc=ctx.createOscillator(); const gain=ctx.createGain(); osc.connect(gain); gain.connect(ctx.destination); osc.frequency.value=800; gain.gain.setValueAtTime(0.2,now); gain.gain.exponentialRampToValueAtTime(0.0001,now+0.1); osc.start(); osc.stop(now+0.1); } }
+    function playCelebration(){ if(state.audioContext){ const ctx=state.audioContext; const now=ctx.currentTime; for(let i=0;i<4;i++){ const osc=ctx.createOscillator(); const gain=ctx.createGain(); osc.connect(gain); gain.connect(ctx.destination); osc.frequency.value=600+i*180; gain.gain.setValueAtTime(0.25,now+i*0.08); gain.gain.exponentialRampToValueAtTime(0.0001,now+0.5+i*0.08); osc.start(now+i*0.08); osc.stop(now+0.6+i*0.08); } } }
+    function showFireworks(){ for(let i=0;i<30;i++){ const fw=document.createElement('div'); fw.className='firework'; fw.style.left=Math.random()*100+'%'; fw.style.top=Math.random()*80+'%'; fw.style.backgroundColor=`hsl(${Math.random()*360},100%,60%)`; document.body.appendChild(fw); setTimeout(()=>fw.remove(),1000); } }
+    function switchScreen(target){
+        state.currentStage=target;
+        ['prologue','stage1','stage2','stage3','stage4','report'].forEach(s=>{ let el=document.getElementById(`screen-${s}`); if(el) el.classList.toggle('hidden',s!==target); });
+        if(target==='stage1') initStage1();
+        else if(target==='stage2') initStage2();
+        else if(target==='stage3') initStage3();
+        else if(target==='stage4') initStage4();
+        else if(target==='report') generateFinalReport();
+    }
+
+    // ================= 第一關邏輯 (保持不變) =================
+    function initStage1(){
+        state.stage1Monsters=[
+            { id:0, name:"泥巴小兵 A", emoji:"👾", hp:80, maxHp:80, finisherWord:"巨光擊", defeated:false, finisherMode:false, attackCount:0 },
+            { id:1, name:"泥巴大王", emoji:"👹", hp:100, maxHp:100, finisherWord:"破天斬", defeated:false, finisherMode:false, attackCount:0 },
+            { id:2, name:"泥巴小兵 B", emoji:"👾", hp:80, maxHp:80, finisherWord:"閃電波", defeated:false, finisherMode:false, attackCount:0 }
+        ];
+        state.stage1LastAttackTime=0;
+        state.evaluation.ddkHits=[];
+        renderStage1Monsters();
+        document.getElementById('detected-word-display').innerText="等待語音...";
+        document.getElementById('word-count-display').innerText="0";
+    }
+    function renderStage1Monsters(){
+        const container=document.getElementById('stage1-monsters-container');
+        if(!container) return;
+        container.innerHTML='';
+        state.stage1Monsters.forEach((mon,idx)=>{
+            const hpPercent=(mon.hp/mon.maxHp)*100;
+            const card=document.createElement('div');
+            card.className=`monster-card ${mon.name==='泥巴大王'?'boss':''} ${mon.finisherMode?'finisher-mode':''}`;
+            card.id=`stage1-monster-${idx}`;
+            card.innerHTML=`
+                <div class="bg-red-950 text-red-400 text-[10px] py-0.5 rounded font-bold mb-1">HP: <span class="monster-hp-text">${mon.hp}</span>/${mon.maxHp}</div>
+                <div class="monster-emoji text-6xl my-2">${mon.emoji}</div>
+                <div class="font-bold text-slate-200">${mon.name}</div>
+                <div class="hp-bar-bg mt-2"><div class="hp-bar" style="width:${hpPercent}%"></div></div>
+                <div class="text-xs text-yellow-300 mt-1">攻擊次數: ${mon.attackCount}</div>
+                ${mon.finisherMode?`<div class="finisher-tag">⚡ 終結技待機：${mon.finisherWord}</div>`:''}
+            `;
+            container.appendChild(card);
+        });
+    }
+    function updateStage1MonsterUI(idx){
+        const mon=state.stage1Monsters[idx];
+        const card=document.getElementById(`stage1-monster-${idx}`);
+        if(!card) return;
+        const hpText=card.querySelector('.monster-hp-text');
+        const hpBar=card.querySelector('.hp-bar');
+        const attackSpan=card.querySelector('.text-yellow-300');
+        if(hpText) hpText.innerText=mon.hp;
+        if(hpBar) hpBar.style.width=`${(mon.hp/mon.maxHp)*100}%`;
+        if(attackSpan) attackSpan.innerText=`攻擊次數: ${mon.attackCount}`;
+        if(mon.defeated){
+            card.style.opacity='0.5';
+            card.style.filter='grayscale(0.5)';
+            card.classList.remove('finisher-mode');
+            const tag=card.querySelector('.finisher-tag');
+            if(tag) tag.remove();
+            return;
+        }
+        if(mon.finisherMode){
+            card.classList.add('finisher-mode');
+            let tag=card.querySelector('.finisher-tag');
+            if(!tag){ tag=document.createElement('div'); tag.className='finisher-tag'; card.appendChild(tag); }
+            tag.innerText=`⚡ 終結技待機：${mon.finisherWord}`;
+        }else{
+            card.classList.remove('finisher-mode');
+            const tag=card.querySelector('.finisher-tag');
+            if(tag) tag.remove();
+        }
+    }
+    function flashLightning(){
+        const lightning=document.getElementById('lightning-effect');
+        if(lightning){ lightning.style.opacity='0.9'; setTimeout(()=>lightning.style.opacity='0',120); }
+        playThunder();
+    }
+    function showDamageEffect(monsterIdx,damage){
+        const card=document.getElementById(`stage1-monster-${monsterIdx}`);
+        if(!card) return;
+        const container=document.getElementById('s1-damage-container');
+        const rect=card.getBoundingClientRect();
+        const parentRect=container.getBoundingClientRect();
+        const div=document.createElement('div');
+        div.className='damage-popup';
+        div.innerText=`-${damage}`;
+        div.style.left=`${rect.left-parentRect.left+rect.width/2-15}px`;
+        div.style.top=`${rect.top-parentRect.top+20}px`;
+        container.appendChild(div);
+        setTimeout(()=>div.remove(),600);
+    }
+    function normalAttackStage1(triggerWord){
+        const now=Date.now();
+        if(now-state.stage1LastAttackTime<150) return false;
+        state.stage1LastAttackTime=now;
+        const attackable=[];
+        state.stage1Monsters.forEach((m,idx)=>{ if(!m.defeated && !m.finisherMode) attackable.push(idx); });
+        if(attackable.length===0){ showToast('沒有可攻擊的目標！'); return false; }
+        const targetIdx=attackable[Math.floor(Math.random()*attackable.length)];
+        const monster=state.stage1Monsters[targetIdx];
+        monster.attackCount++;
+        let newHp=monster.hp-35;
+        if(newHp<=0) newHp=1;
+        monster.hp=newHp;
+        updateStage1MonsterUI(targetIdx);
+        showDamageEffect(targetIdx,35);
+        flashLightning();
+        state.evaluation.ddkHits.push(now);
+        updateDDKRate();
+        if(monster.attackCount>=2 && !monster.finisherMode && !monster.defeated){
+            monster.finisherMode=true;
+            updateStage1MonsterUI(targetIdx);
+            showToast(`${monster.name} 已承受2次攻擊！請說「${monster.finisherWord}」終結它！`,'⚡');
+        }
+        const allDefeated=state.stage1Monsters.every(m=>m.defeated);
+        if(allDefeated) setTimeout(()=>showStage1Success(),500);
+        return true;
+    }
+    function showStage1Success(){
+        playCelebration();
+        const overlay=document.createElement('div');
+        overlay.className='success-overlay';
+        overlay.innerHTML=`<div class="success-card"><div class="text-7xl mb-4">🏆✨</div><h2 class="text-3xl font-black text-white mb-2">第一關通關！</h2><p class="text-lg text-white mb-4">繼續前往迷霧森林！</p><button id="continueBtn" class="px-6 py-2 bg-blue-600 text-white rounded-full font-bold">繼續</button></div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('continueBtn').onclick=()=>{ overlay.remove(); switchScreen('stage2'); };
+    }
+    function executeFinisherStage1(monsterIdx,spokenWord){
+        const monster=state.stage1Monsters[monsterIdx];
+        if(monster.defeated) return false;
+        if(!monster.finisherMode){ showToast(`${monster.name} 尚未進入終結技模式！`); return false; }
+        const kw=monster.finisherWord;
+        if(spokenWord.includes(kw) || kw.includes(spokenWord) || (spokenWord.includes(kw.slice(0,2)) && kw.length>=2)){
+            monster.defeated=true;
+            monster.hp=0;
+            monster.finisherMode=false;
+            updateStage1MonsterUI(monsterIdx);
+            flashLightning();
+            showToast(`✨ ${kw}！${monster.name} 被消滅！ ✨`,'💥');
+            const allDead=state.stage1Monsters.every(m=>m.defeated);
+            if(allDead) setTimeout(()=>showStage1Success(),500);
+            return true;
+        }else{ showToast(`終結技失敗！需要說「${kw}」`,'❌'); return false; }
+    }
+    function updateDDKRate(){
+        let hits=state.evaluation.ddkHits;
+        if(hits.length<2) return;
+        let now=Date.now();
+        let recent=hits.filter(t=>now-t<3000);
+        if(recent.length<2) return;
+        let rate=(recent.length-1)/((recent[recent.length-1]-recent[0])/1000);
+        document.getElementById('live-ddk-rate').innerText=`${rate.toFixed(1)} 次/秒`;
+    }
+
+    // ================= 第二、三關邏輯 (保持不變) =================
+    function initStage2(){
+        state.stage2.blockageIndex=0; state.stage2.blockageHits=0;
+        state.evaluation.energy=0; state.evaluation.summonedFoods=[];
+        loadBlockage2();
+        updateEnergyUI2();
+        updateSummonedListUI();
+    }
+    function loadBlockage2(){
+        let idx=state.stage2.blockageIndex;
+        if(idx<state.stage2.blockages.length){
+            let cur=state.stage2.blockages[idx];
+            let obstacleDiv=document.getElementById('forest-active-obstacle');
+            obstacleDiv.innerHTML=`<div class="text-6xl">${cur.display}</div><div class="obstacle-text">${cur.label}</div>`;
+            document.getElementById('obstacle-title').innerText=`[ 第${idx+1}重：${cur.title} ]`;
+            document.getElementById('rock-word').innerHTML=cur.word;
+            document.getElementById('spell-counter').innerHTML=`進度:${state.stage2.blockageHits}/3`;
+            document.getElementById('forest-obstacle-bubble').classList.remove('hidden');
+            document.getElementById('forest-hero-feeding').classList.add('hidden');
+            document.getElementById('blockage-counter-txt').innerText=`${state.stage2.blockages.length-idx} 重障礙`;
+            document.getElementById('s2-action-guide').innerText=`請高聲誦讀「${cur.triggerText}」3次`;
+        }else{
+            document.getElementById('forest-obstacle-bubble').classList.add('hidden');
+            document.getElementById('forest-hero-feeding').classList.remove('hidden');
+            document.getElementById('blockage-counter-txt').innerText='障礙清除，快餵食(4種不同食物)';
+            document.getElementById('s2-action-guide').innerHTML='說出食物名稱，需要4種不同食物';
+            speakCantonese('現在勇者肚子餓了，請說出四種不同食物名稱！');
+            document.getElementById('forest-active-obstacle').innerHTML='';
+        }
+    }
+    function breakActiveBlockage(){
+        let idx=state.stage2.blockageIndex;
+        if(idx>=state.stage2.blockages.length) return;
+        let el=document.getElementById('forest-active-obstacle');
+        el.innerHTML=`<div class="text-6xl">💥</div><div class="obstacle-text">粉碎！</div>`;
+        el.classList.add('animate-shake');
+        playHit();
+        showToast(`${state.stage2.blockages[idx].title} 擊碎！`);
+        setTimeout(()=>{
+            el.classList.remove('animate-shake');
+            state.stage2.blockageIndex++;
+            state.stage2.blockageHits=0;
+            let char=document.getElementById('forest-character');
+            char.classList.add('animate-walk');
+            let left=parseInt(char.style.left)||10;
+            char.style.left=`${left+18}%`;
+            setTimeout(()=>{ char.classList.remove('animate-walk'); loadBlockage2(); },800);
+        },800);
+    }
+    function handleFoodSummon(name){
+        if(state.stage2.blockageIndex<state.stage2.blockages.length) return;
+        let matched=null;
+        for(let key in foodDatabase) if(name.includes(key)){ matched=key; break; }
+        if(matched){
+            if(!state.evaluation.summonedFoods.includes(matched)) state.evaluation.summonedFoods.push(matched);
+            let gain=1;
+            state.evaluation.energy=Math.min(4, state.evaluation.energy+gain);
+            updateEnergyUI2();
+            updateSummonedListUI();
+            let dropDiv=document.createElement('div');
+            dropDiv.className=`absolute text-5xl transition-all duration-700 ${matched.includes('花膠')||matched.includes('鮑魚')?'food-glow':''}`;
+            dropDiv.innerText=matched.includes('花膠')||matched.includes('鮑魚')?'✨📦✨':foodDatabase[matched];
+            dropDiv.style.left=`${40+Math.random()*20}%`; dropDiv.style.top='-50px';
+            document.getElementById('s2-drop-container').appendChild(dropDiv);
+            setTimeout(()=>{ dropDiv.style.top='180px'; dropDiv.style.transform='scale(1.2)'; },50);
+            setTimeout(()=>dropDiv.remove(),1500);
+            speakCantonese(`好味！${matched} 補充體力！`);
+            playHit();
+            showToast(`召喚${matched}成功！`,'🍲');
+            if(state.evaluation.energy>=4) setTimeout(()=>{ showToast('體力充滿，前往營地！'); switchScreen('stage3'); },1500);
+        }else{
+            showToast(`「${name}」唔食得㗎！`,'🗑️');
+            let trashDiv=document.createElement('div');
+            trashDiv.className='absolute text-5xl transition-all duration-700';
+            trashDiv.innerText='🗑️❓';
+            trashDiv.style.left=`${40+Math.random()*20}%`; trashDiv.style.top='-50px';
+            document.getElementById('s2-drop-container').appendChild(trashDiv);
+            setTimeout(()=>{ trashDiv.style.top='180px'; },50);
+            setTimeout(()=>trashDiv.remove(),1000);
+        }
+    }
+    function updateEnergyUI2(){
+        let bar=document.getElementById('hero-energy-bar');
+        let txt=document.getElementById('hero-energy-text');
+        let per=state.evaluation.energy/4*100;
+        bar.style.width=`${per}%`;
+        txt.innerText=`${state.evaluation.energy}/4 ${state.evaluation.energy>=4?'滿腹':'飢餓'}`;
+        document.getElementById('foodCountDisplay').innerText=state.evaluation.energy;
+    }
+    function updateSummonedListUI(){
+        let container=document.getElementById('summoned-foods-list');
+        if(!container) return;
+        container.innerHTML=state.evaluation.summonedFoods.map(f=>`<span class="text-xs bg-emerald-950 border border-emerald-500/30 text-emerald-300 px-2 py-1 rounded">🥘 ${f}</span>`).join('')||'<span class="text-xs bg-slate-950 border text-slate-500 px-2 py-1 rounded">尚無食物</span>';
+    }
+    function initStage3(){
+        state.currentNpcIdx=0;
+        state.evaluation.emotionCorrect=0;
+        state.evaluation.empathyCorrect=0;
+        state.evaluation.emotionAttempts=0;
+        state.evaluation.empathyAttempts=0;
+        state.evaluation.npcSelections=[];
+        state.emotionChosen=false;
+        showNpc(0);
+    }
+    function showNpc(idx){
+        if(idx>=state.npcList.length){ showToast('已解救所有旅人，前往祭壇！'); switchScreen('stage4'); return; }
+        state.currentNpc=state.npcList[idx];
+        state.currentNpcIdx=idx;
+        state.emotionChosen=false;
+        document.getElementById('npc-progress-text').innerText=`${idx+1}/5`;
+        document.getElementById('npc-avatar').innerText=state.currentNpc.avatar;
+        document.getElementById('npc-role').innerText=state.currentNpc.role;
+        document.getElementById('npc-name').innerText=state.currentNpc.name;
+        document.getElementById('npc-speech').innerHTML=`「${state.currentNpc.speech}」`;
+        document.getElementById('btn-play-npc-speech').onclick=()=>speakCantonese(state.currentNpc.speech);
+        document.getElementById('s3-step-emotion').classList.remove('hidden');
+        document.getElementById('s3-step-dialogue').classList.add('hidden');
+        document.getElementById('emotion-error-msg').classList.add('hidden');
+        document.querySelectorAll('.btn-emotion').forEach(btn=>{
+            btn.onclick=()=>checkEmotion(btn.getAttribute('data-emotion'));
+        });
+    }
+    function checkEmotion(selected){
+        if(state.emotionChosen) return;
+        state.evaluation.emotionAttempts++;
+        let isCorrect = (selected===state.currentNpc.emotion);
+        if(isCorrect){
+            state.evaluation.emotionCorrect++;
+            showToast('情緒辨識正確！','🎯');
+            state.emotionChosen=true;
+            document.getElementById('s3-step-emotion').classList.add('hidden');
+            showDialogueOptions();
+        }else{
+            state.evaluation.npcSelections.push({
+                npc: state.currentNpc.name,
+                step: 'emotion',
+                selected: selected,
+                correct: false,
+                expected: state.currentNpc.emotion
+            });
+            document.getElementById('emotion-error-msg').classList.remove('hidden');
+            setTimeout(()=>document.getElementById('emotion-error-msg').classList.add('hidden'),1500);
+        }
+    }
+    function showDialogueOptions(){
+        let container=document.getElementById('dialogue-options-container');
+        container.innerHTML='';
+        let shuffled=[...state.currentNpc.options];
+        for(let i=shuffled.length-1;i>0;i--){ let j=Math.floor(Math.random()*(i+1)); [shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]]; }
+        shuffled.forEach(opt=>{
+            let btn=document.createElement('button');
+            btn.className='w-full text-left bg-slate-950 hover:bg-slate-800 p-2.5 rounded border border-slate-700 font-bold text-xs text-slate-200';
+            btn.innerHTML=`<p class="text-xs text-white font-bold">${opt.text}</p>`;
+            btn.onclick=()=>{
+                state.evaluation.empathyAttempts++;
+                let isCorrect = (opt.score>=9);
+                if(isCorrect){
+                    state.evaluation.empathyCorrect++;
+                    showToast('你的回應很溫暖！','❤️');
+                    state.evaluation.npcSelections.push({
+                        npc: state.currentNpc.name,
+                        step: 'dialogue',
+                        selected: opt.text,
+                        correct: true
+                    });
+                    showNpc(state.currentNpcIdx+1);
+                }else{
+                    state.evaluation.npcSelections.push({
+                        npc: state.currentNpc.name,
+                        step: 'dialogue',
+                        selected: opt.text,
+                        correct: false,
+                        expected: state.currentNpc.options.find(o=>o.score>=9)?.text || "溫暖的回應"
+                    });
+                    let msgDiv=document.getElementById('dialogue-error-msg');
+                    msgDiv.innerHTML='<div class="text-red-400 text-center">❌ 再想想，那個回應不夠貼心，試試更溫暖的回答吧！</div>';
+                    msgDiv.classList.remove('hidden');
+                    setTimeout(()=>msgDiv.classList.add('hidden'),1500);
+                }
+            };
+            container.appendChild(btn);
+        });
+        document.getElementById('s3-step-dialogue').classList.remove('hidden');
+    }
+
+    // ================= 第四關邏輯 (保持不變) =================
+    function initStage4(){
+        state.evaluation.mptFireUnlocked=false; state.evaluation.mptWindUnlocked=false; state.evaluation.mptThunderUnlocked=false;
+        state.evaluation.mptFireDuration=0; state.evaluation.mptWindDuration=0; state.evaluation.mptThunderDuration=0;
+        state.mptActiveType=null;
+        if(state.mptTimerInterval) clearInterval(state.mptTimerInterval);
+        document.getElementById('fire-status').innerText='未解鎖'; document.getElementById('wind-status').innerText='未解鎖'; document.getElementById('thunder-status').innerText='未解鎖';
+        document.getElementById('lock-fire').classList.remove('unlocked'); document.getElementById('lock-wind').classList.remove('unlocked'); document.getElementById('lock-thunder').classList.remove('unlocked');
+        document.getElementById('lock-fire').innerHTML='<i class="fa-solid fa-lock mr-1"></i>烈焰';
+        document.getElementById('lock-wind').innerHTML='<i class="fa-solid fa-lock mr-1"></i>颶風';
+        document.getElementById('lock-thunder').innerHTML='<i class="fa-solid fa-lock mr-1"></i>雷神';
+        document.getElementById('chest-emoji').innerText='🔒📦';
+        document.getElementById('chest-status-text').innerText='需解鎖三個印記';
+        document.getElementById('mpt-progress-bar').style.width='0%';
+        document.getElementById('mpt-progress-text').innerText='點擊元素後開始';
+        document.getElementById('mpt-feedback').innerHTML='點擊元素後，發出聲音持續5秒解鎖';
+        document.getElementById('mpt-timer-display').innerText='0.0秒';
+        state.mptVoiceActive=false;
+        state.mptConfirmCounter=0;
+    }
+    function startMPTMonitoring(type){
+        if(state.mptTimerInterval) clearInterval(state.mptTimerInterval);
+        state.mptActiveType=type;
+        state.mptVoiceActive=false;
+        state.mptVoiceStart=0;
+        state.mptConfirmCounter=0;
+        function getVolume(){
+            if(!state.analyser) return -100;
+            const data=new Uint8Array(state.analyser.frequencyBinCount);
+            state.analyser.getByteFrequencyData(data);
+            let avg=data.reduce((a,b)=>a+b,0)/data.length;
+            let db=avg>0?Math.round(20*Math.log10(avg/255)):-100;
+            return db;
+        }
+        state.mptTimerInterval=setInterval(()=>{
+            if(state.currentStage!=='stage4'){ clearInterval(state.mptTimerInterval); return; }
+            if(!state.mptActiveType){ 
+                document.getElementById('mpt-progress-bar').style.width='0%'; 
+                document.getElementById('mpt-progress-text').innerText='點擊元素後開始'; 
+                return; 
+            }
+            let unlocked=false;
+            if(type==='fire' && state.evaluation.mptFireUnlocked) unlocked=true;
+            if(type==='wind' && state.evaluation.mptWindUnlocked) unlocked=true;
+            if(type==='thunder' && state.evaluation.mptThunderUnlocked) unlocked=true;
+            if(unlocked){ clearInterval(state.mptTimerInterval); state.mptTimerInterval=null; state.mptActiveType=null; return; }
+            const db=getVolume();
+            const isLoud=db>state.mptVolumeThreshold;
+            if(isLoud && !state.mptVoiceActive){
+                state.mptConfirmCounter++;
+                if(state.mptConfirmCounter>=2){
+                    state.mptVoiceActive=true;
+                    state.mptVoiceStart=Date.now();
+                    document.getElementById('mpt-feedback').innerHTML='<span class="text-green-400">🎙️ 偵測到穩定聲音，請持續！</span>';
+                }else{
+                    document.getElementById('mpt-feedback').innerHTML='<span class="text-yellow-300">🎤 偵測到聲響，請維持發聲...</span>';
+                }
+            }else if(!isLoud){
+                state.mptConfirmCounter=0;
+                if(state.mptVoiceActive){
+                    state.mptVoiceActive=false;
+                    document.getElementById('mpt-feedback').innerHTML='<span class="text-red-400">❌ 聲音中斷，請重新持續5秒</span>';
+                    document.getElementById('mpt-progress-bar').style.width='0%';
+                    document.getElementById('mpt-progress-text').innerText='中斷，重新開始';
+                    document.getElementById('mpt-timer-display').innerText='0.0秒';
+                }
+            }
+            if(state.mptVoiceActive){
+                const elapsed=(Date.now()-state.mptVoiceStart)/1000;
+                const percent=Math.min(100,(elapsed/5)*100);
+                document.getElementById('mpt-progress-bar').style.width=`${percent}%`;
+                document.getElementById('mpt-progress-text').innerHTML=`充能 ${Math.round(percent)}% (${elapsed.toFixed(1)}秒)`;
+                document.getElementById('mpt-timer-display').innerText=`${elapsed.toFixed(1)}秒`;
+                if(elapsed>=5){
+                    let duration=elapsed;
+                    if(type==='fire'){ state.evaluation.mptFireUnlocked=true; state.evaluation.mptFireDuration=duration; }
+                    else if(type==='wind'){ state.evaluation.mptWindUnlocked=true; state.evaluation.mptWindDuration=duration; }
+                    else{ state.evaluation.mptThunderUnlocked=true; state.evaluation.mptThunderDuration=duration; }
+                    let maxDur=Math.max(state.evaluation.mptFireDuration,state.evaluation.mptWindDuration,state.evaluation.mptThunderDuration);
+                    state.evaluation.mptMaxDuration=maxDur;
+                    showToast(`${type==='fire'?'火':(type==='wind'?'風':'雷')}元素解鎖！`, '🔓');
+                    document.getElementById('mpt-feedback').innerHTML=`${type==='fire'?'火':(type==='wind'?'風':'雷')}元素已解鎖！`;
+                    if(type==='fire'){ document.getElementById('fire-status').innerText='✓ 已解鎖'; document.getElementById('lock-fire').classList.add('unlocked'); document.getElementById('lock-fire').innerHTML='<i class="fa-solid fa-lock-open mr-1"></i>烈焰'; }
+                    if(type==='wind'){ document.getElementById('wind-status').innerText='✓ 已解鎖'; document.getElementById('lock-wind').classList.add('unlocked'); document.getElementById('lock-wind').innerHTML='<i class="fa-solid fa-lock-open mr-1"></i>颶風'; }
+                    if(type==='thunder'){ document.getElementById('thunder-status').innerText='✓ 已解鎖'; document.getElementById('lock-thunder').classList.add('unlocked'); document.getElementById('lock-thunder').innerHTML='<i class="fa-solid fa-lock-open mr-1"></i>雷神'; }
+                    clearInterval(state.mptTimerInterval);
+                    state.mptTimerInterval=null;
+                    state.mptActiveType=null;
+                    checkAllMPTUnlockedAndOpenChest();
+                }
+            }
+        },100);
+    }
+    function selectMptType(type){
+        let unlocked=false;
+        if(type==='fire' && state.evaluation.mptFireUnlocked) unlocked=true;
+        if(type==='wind' && state.evaluation.mptWindUnlocked) unlocked=true;
+        if(type==='thunder' && state.evaluation.mptThunderUnlocked) unlocked=true;
+        if(unlocked){ showToast('這個元素已經解鎖過了！'); return; }
+        if(state.mptTimerInterval) clearInterval(state.mptTimerInterval);
+        state.mptActiveType=type;
+        document.getElementById('mpt-feedback').innerHTML=`已選擇 ${type==='fire'?'火':(type==='wind'?'風':'雷')} 元素，請開始持續發聲5秒！`;
+        document.getElementById('mpt-progress-bar').style.width='0%';
+        document.getElementById('mpt-progress-text').innerText='偵測聲音中...';
+        document.getElementById('mpt-timer-display').innerText='0.0秒';
+        startMPTMonitoring(type);
+    }
+    function checkAllMPTUnlockedAndOpenChest(){
+        if(state.evaluation.mptFireUnlocked && state.evaluation.mptWindUnlocked && state.evaluation.mptThunderUnlocked){
+            playCelebration();
+            showFireworks();
+            const chestDiv = document.getElementById('chest-emoji');
+            chestDiv.classList.remove('animate-float');
+            chestDiv.classList.add('chest-open-animation');
+            chestDiv.innerText = '🔓✨📦✨';
+            document.getElementById('chest-status-text').innerText = '轟！三大魔印解開！寶箱爆發！';
+            showToast('完美通關！獲得終極寶藏！','👑');
+            speakCantonese('寶箱打開啦！你真係厲害嘅聲能勇者！');
+            setTimeout(()=>switchScreen('report'),3500);
+        }
+    }
+    function mockCharge(){
+        if(!state.mptActiveType){ showToast('請先選擇一個元素'); return; }
+        let type=state.mptActiveType;
+        if(type==='fire'){ state.evaluation.mptFireUnlocked=true; state.evaluation.mptFireDuration=5.0; }
+        else if(type==='wind'){ state.evaluation.mptWindUnlocked=true; state.evaluation.mptWindDuration=5.0; }
+        else{ state.evaluation.mptThunderUnlocked=true; state.evaluation.mptThunderDuration=5.0; }
+        let maxDur=Math.max(state.evaluation.mptFireDuration,state.evaluation.mptWindDuration,state.evaluation.mptThunderDuration);
+        state.evaluation.mptMaxDuration=maxDur;
+        showToast(`${type==='fire'?'火':(type==='wind'?'風':'雷')}元素測試解鎖！`);
+        if(type==='fire'){ document.getElementById('fire-status').innerText='✓ 已解鎖'; document.getElementById('lock-fire').classList.add('unlocked'); document.getElementById('lock-fire').innerHTML='<i class="fa-solid fa-lock-open mr-1"></i>烈焰'; }
+        if(type==='wind'){ document.getElementById('wind-status').innerText='✓ 已解鎖'; document.getElementById('lock-wind').classList.add('unlocked'); document.getElementById('lock-wind').innerHTML='<i class="fa-solid fa-lock-open mr-1"></i>颶風'; }
+        if(type==='thunder'){ document.getElementById('thunder-status').innerText='✓ 已解鎖'; document.getElementById('lock-thunder').classList.add('unlocked'); document.getElementById('lock-thunder').innerHTML='<i class="fa-solid fa-lock-open mr-1"></i>雷神'; }
+        if(state.mptTimerInterval) clearInterval(state.mptTimerInterval);
+        state.mptTimerInterval=null;
+        state.mptActiveType=null;
+        checkAllMPTUnlockedAndOpenChest();
+    }
+
+    // ================= 通關數據生成 =================
+    function generateFinalReport(){
+        let ddkRate=state.evaluation.ddkHits.length>2?((state.evaluation.ddkHits.length-1)/((state.evaluation.ddkHits[state.evaluation.ddkHits.length-1]-state.evaluation.ddkHits[0])/1000)).toFixed(1):"0.0";
+        document.getElementById('rep-ddk-rate').innerText=ddkRate;
+        let stabilityText = '資料不足';
+        let hits = state.evaluation.ddkHits;
+        if (hits.length >= 3) {
+            let intervals = [];
+            for (let i = 1; i < hits.length; i++) intervals.push(hits[i] - hits[i-1]);
+            let avg = intervals.reduce((a,b)=>a+b,0) / intervals.length;
+            let variance = intervals.map(v => Math.pow(v - avg, 2)).reduce((a,b)=>a+b,0) / intervals.length;
+            let stdDev = Math.sqrt(variance);
+            let cv = stdDev / avg;
+            if (cv < 0.15) stabilityText = '高度平穩 (CV: ' + cv.toFixed(3) + ')';
+            else if (cv < 0.30) stabilityText = '輕微波動 (CV: ' + cv.toFixed(3) + ')';
+            else stabilityText = '明顯不穩 (CV: ' + cv.toFixed(3) + ')';
+        } else if (hits.length === 2) stabilityText = '樣本不足 (僅2次攻擊)';
+        document.getElementById('rep-ddk-stability').innerText = stabilityText;
+        document.getElementById('rep-food-list').innerHTML=state.evaluation.summonedFoods.map(f=>`<span class="text-white text-xs bg-slate-900 px-2 py-0.5 rounded">🥘 ${f}</span>`).join('');
+        let maxSec=state.evaluation.mptMaxDuration?state.evaluation.mptMaxDuration.toFixed(2):"0.00";
+        document.getElementById('rep-mpt-max').innerText=`${maxSec} 秒`;
+        let emotionWrong = state.evaluation.emotionAttempts - state.evaluation.emotionCorrect;
+        let empathyWrong = state.evaluation.empathyAttempts - state.evaluation.empathyCorrect;
+        document.getElementById('rep-emotion-acc').innerHTML = `${state.evaluation.emotionCorrect}/5 (嘗試 ${state.evaluation.emotionAttempts} 次，錯誤 ${emotionWrong} 次)`;
+        document.getElementById('rep-empathy-acc').innerHTML = `${state.evaluation.empathyCorrect}/5 (嘗試 ${state.evaluation.empathyAttempts} 次，錯誤 ${empathyWrong} 次)`;
+    }
+
+    // ================= 雙視頻錄製 (調整後的版本) =================
+    let faceMesh = null, faceCamera = null, faceCanvas = document.getElementById('face-canvas'), faceVideo = document.getElementById('face-video'), faceCtx = faceCanvas.getContext('2d');
+    let faceDataArray = { symmetry: [], openness: [], tongue: [] };
+    let mediaRecorderFace = null, recordedChunksFace = [], mediaRecorderRaw = null, recordedChunksRaw = [], rawCanvas = document.getElementById('raw-canvas'), rawCtx = rawCanvas.getContext('2d'), rawVideo = document.getElementById('raw-video');
+    
+    async function initDualVideoRecording() {
+        if (!window.FaceMesh) { console.warn("FaceMesh 未載入"); return; }
+        faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
+        faceMesh.setOptions({
+            maxNumFaces: 1,
+            refineLandmarks: true,
+            minDetectionConfidence: 0.3,
+            minTrackingConfidence: 0.3,
+            selfieMode: false
+        });
+        faceMesh.onResults(onFaceResults);
+        const Camera = window.Camera;
+        faceCamera = new Camera(faceVideo, {
+            onFrame: async () => { if (faceMesh) await faceMesh.send({ image: faceVideo }); },
+            width: 640,
+            height: 480
+        });
+        await faceCamera.start();
+        
+        if (state.mediaStream) {
+            const rawStream = state.mediaStream.clone ? state.mediaStream.clone() : state.mediaStream;
+            const rawVideoTracks = rawStream.getVideoTracks();
+            if (rawVideoTracks.length > 0) {
+                rawVideo.srcObject = rawStream;
+                await rawVideo.play();
+                await new Promise(r => setTimeout(r, 500));
+                const drawRawFrame = () => { if (rawVideo.readyState === 4 && rawCtx) { rawCtx.drawImage(rawVideo, 0, 0, rawCanvas.width, rawCanvas.height); } requestAnimationFrame(drawRawFrame); };
+                drawRawFrame();
+                const rawCanvasStream = rawCanvas.captureStream(30);
+                let finalRawStream = rawCanvasStream;
+                if (state.mediaStream.getAudioTracks().length > 0) { const audioTracks = state.mediaStream.getAudioTracks(); finalRawStream = new MediaStream([...rawCanvasStream.getVideoTracks(), ...audioTracks]); }
+                mediaRecorderRaw = new MediaRecorder(finalRawStream, { mimeType: 'video/webm' });
+                recordedChunksRaw = [];
+                mediaRecorderRaw.ondataavailable = (e) => { if (e.data.size > 0) recordedChunksRaw.push(e.data); };
+                mediaRecorderRaw.start();
+            }
+        }
+        const faceStream = faceCanvas.captureStream(30);
+        let finalFaceStream = faceStream;
+        if (state.mediaStream && state.mediaStream.getAudioTracks().length > 0) { const audioTracks = state.mediaStream.getAudioTracks(); finalFaceStream = new MediaStream([...faceStream.getVideoTracks(), ...audioTracks]); }
+        mediaRecorderFace = new MediaRecorder(finalFaceStream, { mimeType: 'video/webm' });
+        recordedChunksFace = [];
+        mediaRecorderFace.ondataavailable = (e) => { if (e.data.size > 0) recordedChunksFace.push(e.data); };
+        mediaRecorderFace.start();
+    }
+    
+    function onFaceResults(results) {
+        const now = performance.now();
+        if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+            const landmarks = results.multiFaceLandmarks[0];
+            const leftMouth = landmarks[61], rightMouth = landmarks[291], upperLip = landmarks[13], lowerLip = landmarks[14], noseTip = landmarks[1];
+            if (leftMouth && rightMouth && upperLip && lowerLip) {
+                const leftDist = Math.hypot(leftMouth.x - noseTip.x, leftMouth.y - noseTip.y);
+                const rightDist = Math.hypot(rightMouth.x - noseTip.x, rightMouth.y - noseTip.y);
+                const symmetry = rightDist > 0 ? (Math.min(leftDist, rightDist) / Math.max(leftDist, rightDist)) * 100 : 100;
+                const openness = Math.abs(upperLip.y - lowerLip.y) * 1000;
+                let tongue = openness;
+                faceDataArray.symmetry.push({ t: now, v: symmetry });
+                faceDataArray.openness.push({ t: now, v: openness });
+                faceDataArray.tongue.push({ t: now, v: tongue });
+                if (faceDataArray.symmetry.length > 1000) faceDataArray.symmetry.shift();
+                if (faceDataArray.openness.length > 1000) faceDataArray.openness.shift();
+                if (faceDataArray.tongue.length > 1000) faceDataArray.tongue.shift();
+            }
+            if (faceCtx) {
+                faceCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
+                for (let lm of landmarks) { const x = lm.x * faceCanvas.width, y = lm.y * faceCanvas.height; faceCtx.beginPath(); faceCtx.arc(x, y, 1, 0, 2 * Math.PI); faceCtx.fillStyle = 'cyan'; faceCtx.fill(); }
+                const lipIndices = [61,146,91,181,84,17,314,405,320,307,375,321,308,324,318,402,317,14,87,178,88,95];
+                faceCtx.beginPath(); faceCtx.strokeStyle = 'yellow'; faceCtx.lineWidth = 1;
+                for (let i = 0; i < lipIndices.length - 1; i++) { const p1 = landmarks[lipIndices[i]], p2 = landmarks[lipIndices[i+1]]; if (p1 && p2) { faceCtx.moveTo(p1.x * faceCanvas.width, p1.y * faceCanvas.height); faceCtx.lineTo(p2.x * faceCanvas.width, p2.y * faceCanvas.height); faceCtx.stroke(); } }
+            }
+        } else { if (faceCtx) faceCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height); }
+    }
+    
+    function stopDualVideoRecording() { if (mediaRecorderFace && mediaRecorderFace.state === 'recording') mediaRecorderFace.stop(); if (mediaRecorderRaw && mediaRecorderRaw.state === 'recording') mediaRecorderRaw.stop(); }
+    function getRecordingBlobs() { let faceBlob = recordedChunksFace.length ? new Blob(recordedChunksFace, { type: 'video/webm' }) : null; let rawBlob = recordedChunksRaw.length ? new Blob(recordedChunksRaw, { type: 'video/webm' }) : null; return { face: faceBlob, raw: rawBlob }; }
+
+    // ================= 語音與音量 (保持不變) =================
+    async function initAudio(){
+        try{
+            let stream=await navigator.mediaDevices.getUserMedia({audio:true, video:true});
+            state.mediaStream=stream;
+            const audioTracks = stream.getAudioTracks();
+            let audioStream = new MediaStream(audioTracks);
+            let actx=new (window.AudioContext||window.webkitAudioContext)();
+            state.audioContext=actx;
+            state.analyser=actx.createAnalyser();
+            state.analyser.fftSize=256;
+            let src=actx.createMediaStreamSource(audioStream);
+            src.connect(state.analyser);
+            document.getElementById('mic-status').className='w-3 h-3 rounded-full bg-green-500';
+            document.getElementById('mic-text').innerText='魔音笛已連通';
+            if(actx.state==='suspended') await actx.resume();
+            monitorVolume();
+            await initDualVideoRecording();
+        }catch(e){ console.warn(e); showToast('麥克風或攝像頭無法使用','❌'); }
+    }
+    function monitorVolume(){
+        if(!state.analyser) return;
+        let data=new Uint8Array(state.analyser.frequencyBinCount);
+        setInterval(()=>{
+            if(!state.analyser) return;
+            state.analyser.getByteFrequencyData(data);
+            let avg=data.reduce((a,b)=>a+b,0)/data.length;
+            let db=avg>0?Math.round(20*Math.log10(avg/255)):-100;
+            let volBar=document.getElementById('volume-bar');
+            let volVal=document.getElementById('volume-val');
+            let mptVol=document.getElementById('mpt-vol-db');
+            if(volBar) volBar.style.width=`${Math.min(100,Math.max(0,(db+80)/80*100))}%`;
+            if(volVal) volVal.innerText=`${db} dB`;
+            if(mptVol) mptVol.innerText=`${db} dB`;
+        },100);
+    }
+    function initSpeechRecognition(){
+        const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+        if(!SpeechRecognition){ showToast('語音辨識不支援'); return; }
+        let recog=new SpeechRecognition();
+        recog.continuous=true;
+        recog.interimResults=true;
+        recog.lang='zh-HK';
+        recog.onresult=(e)=>{
+            for(let i=e.resultIndex;i<e.results.length;i++){
+                let txt=e.results[i][0].transcript.trim();
+                if(e.results[i].isFinal) handleSpeechInput(txt);
+                document.getElementById('detected-word-display').innerText=txt||'⋯';
+            }
+        };
+        recog.onend=()=>{ state.isRecognizing=false; if(state.currentStage!=='report') try{ recog.start(); }catch(e){} };
+        state.speechRecognizer=recog;
+        recog.start();
+    }
+    function handleSpeechInput(text){
+        if(!text) return;
+        document.getElementById('stt-realtime-output').innerText=`「${text}」`;
+        if(state.currentStage==='stage1'){
+            let finisherActive=state.stage1Monsters.filter(m=>m.finisherMode&&!m.defeated);
+            if(finisherActive.length>0){
+                for(let m of finisherActive){
+                    if(text.includes(m.finisherWord)){ executeFinisherStage1(m.id,text); return; }
+                }
+                showToast(`終結技模式，請說出：${finisherActive.map(m=>m.finisherWord).join('或')}`);
+                return;
+            }
+            let cleaned=text.replace(/[^a-zA-Z\u4e00-\u9fff]/g,'');
+            if(cleaned.length===0) return;
+            let i=0, attacked=new Set();
+            while(i<cleaned.length){
+                let j=i; while(j<cleaned.length && cleaned[j]===cleaned[i]) j++;
+                let len=j-i;
+                if(len>=3){
+                    let ch=cleaned[i];
+                    if(!attacked.has(ch)){ attacked.add(ch); normalAttackStage1(ch); }
+                }
+                i=j;
+            }
+        }else if(state.currentStage==='stage2'){
+            let idx=state.stage2.blockageIndex;
+            if(idx<state.stage2.blockages.length){
+                let trigger=state.stage2.blockages[idx].triggerText;
+                if(text.includes(trigger) && Date.now()-state.stage2.lastWordTime>800){
+                    state.stage2.lastWordTime=Date.now();
+                    state.stage2.blockageHits++;
+                    document.getElementById('spell-counter').innerHTML=`進度:${state.stage2.blockageHits}/3`;
+                    playHit();
+                    if(state.stage2.blockageHits>=3) breakActiveBlockage();
+                }
+            }else{
+                for(let f in foodDatabase) if(text.includes(f)){ handleFoodSummon(f); break; }
+            }
+        }
+    }
+
+    // ================= 導出遊戲記錄 =================
+    async function exportReport(){
+        stopDualVideoRecording();
+        await new Promise(r => setTimeout(r, 500));
+        let zip=new JSZip();
+        let intervals = [];
+        for(let i=1;i<state.evaluation.ddkHits.length;i++) intervals.push(state.evaluation.ddkHits[i]-state.evaluation.ddkHits[i-1]);
+        let avgInterval = intervals.length ? (intervals.reduce((a,b)=>a+b,0)/intervals.length).toFixed(1) : "N/A";
+        let minInterval = intervals.length ? Math.min(...intervals).toFixed(1) : "N/A";
+        let maxInterval = intervals.length ? Math.max(...intervals).toFixed(1) : "N/A";
+        let finisherSuccessCount = state.stage1Monsters.filter(m=>m.defeated).length;
+        let htmlReport = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>遊戲記錄</title><style>body{font-family:sans-serif; background:#f0f2f5; padding:20px;} .card{background:white; border-radius:12px; padding:20px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.1);} h2{color:#1e3a8a;} .stat{font-size:1.2em; font-weight:bold; color:#0f172a;} .good{color:#15803d;} .warn{color:#b45309;} .bad{color:#b91c1c;}</style></head><body><h1>聲能傳奇 · 遊戲記錄</h1><div class="card"><h2>第一關：戰鬥表現</h2><p>總攻擊次數: ${state.evaluation.ddkHits.length}</p><p>平均間隔: ${avgInterval} ms</p><p>最小/最大間隔: ${minInterval} / ${maxInterval} ms</p><p>連擊速率: ${(state.evaluation.ddkHits.length>1?((state.evaluation.ddkHits.length-1)/((state.evaluation.ddkHits[state.evaluation.ddkHits.length-1]-state.evaluation.ddkHits[0])/1000)).toFixed(2):'0')} 次/秒</p><p>節奏穩定: ${document.getElementById('rep-ddk-stability').innerText}</p><p>終結技成功率: ${finisherSuccessCount}/3 (${(finisherSuccessCount/3*100).toFixed(0)}%)</p></div><div class="card"><h2>第二關：美食召喚</h2><p>清除障礙物數量: ${state.stage2.blockageIndex}</p><p>召喚美食: ${state.evaluation.summonedFoods.join(', ')}</p><p>平均食物反應時間: ${state.evaluation.foodReactionTimes.length ? (state.evaluation.foodReactionTimes.reduce((a,b)=>a+b,0)/state.evaluation.foodReactionTimes.length).toFixed(0) : 'N/A'} ms</p></div><div class="card"><h2>第三關：旅人相助</h2><p>情緒判斷正確率: ${state.evaluation.emotionCorrect}/5 (嘗試 ${state.evaluation.emotionAttempts} 次)</p><p>溫暖回應正確率: ${state.evaluation.empathyCorrect}/5 (嘗試 ${state.evaluation.empathyAttempts} 次)</p><h3>詳細記錄</h3><ul>${state.evaluation.npcSelections.map(s=>`<li>${s.npc} - ${s.step}: ${s.correct ? '✓ 正確' : '✗ 錯誤' + (s.expected ? ' (期望: '+s.expected+')' : '')}</li>`).join('')}</ul></div><div class="card"><h2>第四關：元素共鳴</h2><p>火元素: ${state.evaluation.mptFireDuration.toFixed(2)} 秒</p><p>風元素: ${state.evaluation.mptWindDuration.toFixed(2)} 秒</p><p>雷元素: ${state.evaluation.mptThunderDuration.toFixed(2)} 秒</p><p>最長持續: ${Math.max(state.evaluation.mptFireDuration,state.evaluation.mptWindDuration,state.evaluation.mptThunderDuration).toFixed(2)} 秒</p></div><div class="card"><h2>臉部追蹤數據</h2><p>嘴唇對稱性平均值: ${faceDataArray.symmetry.length ? (faceDataArray.symmetry.reduce((a,b)=>a+b.v,0)/faceDataArray.symmetry.length).toFixed(1) : 'N/A'} %</p><p>嘴巴開合度平均值: ${faceDataArray.openness.length ? (faceDataArray.openness.reduce((a,b)=>a+b.v,0)/faceDataArray.openness.length).toFixed(1) : 'N/A'}</p><p>舌頭活動預測平均值: ${faceDataArray.tongue.length ? (faceDataArray.tongue.reduce((a,b)=>a+b.v,0)/faceDataArray.tongue.length).toFixed(1) : 'N/A'}</p></div></body></html>`;
+        zip.file("game_record.html", htmlReport);
+        let jsonReport = { timestamp: new Date().toISOString(), ddk: { hits: state.evaluation.ddkHits, intervals_ms: intervals, rate: (state.evaluation.ddkHits.length>1?((state.evaluation.ddkHits.length-1)/((state.evaluation.ddkHits[state.evaluation.ddkHits.length-1]-state.evaluation.ddkHits[0])/1000)).toFixed(2):'0') }, finisher: { successCount: finisherSuccessCount }, stage2: { foods: state.evaluation.summonedFoods, foodReactionTimes: state.evaluation.foodReactionTimes }, stage3: { emotionCorrect: state.evaluation.emotionCorrect, empathyCorrect: state.evaluation.empathyCorrect, npcSelections: state.evaluation.npcSelections }, stage4: { mptDurations: { fire: state.evaluation.mptFireDuration, wind: state.evaluation.mptWindDuration, thunder: state.evaluation.mptThunderDuration } }, faceDataSummary: { symmetry_mean: faceDataArray.symmetry.length ? (faceDataArray.symmetry.reduce((a,b)=>a+b.v,0)/faceDataArray.symmetry.length).toFixed(2) : null, openness_mean: faceDataArray.openness.length ? (faceDataArray.openness.reduce((a,b)=>a+b.v,0)/faceDataArray.openness.length).toFixed(2) : null, tongue_mean: faceDataArray.tongue.length ? (faceDataArray.tongue.reduce((a,b)=>a+b.v,0)/faceDataArray.tongue.length).toFixed(2) : null } };
+        zip.file("game_data.json", JSON.stringify(jsonReport, null, 2));
+        let blobs = getRecordingBlobs();
+        if(blobs.face) zip.file("face_track.webm", blobs.face);
+        if(blobs.raw) zip.file("raw_video.webm", blobs.raw);
+        let content=await zip.generateAsync({type:"blob"});
+        let link=document.createElement('a');
+        link.href=URL.createObjectURL(content);
+        link.download="sonic_legend_record.zip";
+        link.click();
+        URL.revokeObjectURL(link.href);
+    }
+
+    // ================= 啟動遊戲 =================
+    const prologueSteps = [
+        { text: "在古老而神秘的「聲能大陸」上，隱藏著一座能吸收萬物共振力量的太古寶庫...", mapPos: { left: "48px", top: "100px" }, icon: "🧙‍♂️" },
+        { text: "傳說只有『聲能勇者』，才能打破魔印封鎖，獲取絕世神器！", mapPos: { left: "150px", top: "80px" }, icon: "🧙‍♂️" },
+        { text: "然而，前往的道路被鎖住，一路上潛伏著各式各樣的考驗與飢餓危機...", mapPos: { left: "260px", top: "120px" }, icon: "🛡️" },
+        { text: "勇者啊！去拯救世界！尋寶大冒險 ── 正式開啟！", mapPos: { left: "420px", top: "140px" }, icon: "⚔️" }
+    ];
+    let prologueLocalIdx = 0;
+    function runPrologue(){
+        let step=prologueSteps[prologueLocalIdx];
+        let hero=document.getElementById('prologue-hero');
+        let txt=document.getElementById('prologue-text');
+        hero.style.left=step.mapPos.left; hero.style.top=step.mapPos.top; hero.innerText=step.icon;
+        txt.innerHTML='';
+        let i=0, timer=setInterval(()=>{ if(i<step.text.length){ txt.innerHTML+=step.text[i]; i++; }else clearInterval(timer); },35);
+        speakCantonese(step.text);
+    }
+    window.onload=()=>{
+        runPrologue();
+        document.getElementById('btn-prologue-next').onclick=async()=>{
+            prologueLocalIdx++;
+            if(prologueLocalIdx<prologueSteps.length){
+                runPrologue();
+            }else{
+                await initAudio();
+                initSpeechRecognition();
+                switchScreen('stage1');
+            }
+        };
+        document.getElementById('btn-da').onclick=()=>{ state.evaluation.ddkType='da'; document.getElementById('ddk-target-text').innerHTML='「噠噠噠！」(/da/)'; };
+        document.getElementById('btn-ba').onclick=()=>{ state.evaluation.ddkType='ba'; document.getElementById('ddk-target-text').innerHTML='「吧吧吧！」(/ba/)'; };
+        document.getElementById('btn-skip-s1').onclick=()=>switchScreen('stage2');
+        document.getElementById('mockAttackBtn').onclick=()=>normalAttackStage1("模擬");
+        document.getElementById('mockFinisher1Btn').onclick=()=>executeFinisherStage1(0,"巨光擊");
+        document.getElementById('mockFinisher2Btn').onclick=()=>executeFinisherStage1(1,"破天斬");
+        document.getElementById('mockFinisher3Btn').onclick=()=>executeFinisherStage1(2,"閃電波");
+        document.getElementById('btn-force-break-rock').onclick=()=>{ if(state.stage2.blockageIndex<state.stage2.blockages.length) breakActiveBlockage(); };
+        document.getElementById('btn-force-feed').onclick=()=>{ if(state.stage2.blockageIndex>=state.stage2.blockages.length) handleFoodSummon('燒賣'); };
+        document.getElementById('btn-force-npc-next').onclick=()=>{ showNpc(state.currentNpcIdx+1); };
+        document.querySelectorAll('.btn-mpt-type').forEach(btn=>{ btn.addEventListener('click',()=>selectMptType(btn.getAttribute('data-type'))); });
+        document.getElementById('mockChargeBtn').onclick=()=>mockCharge();
+        document.getElementById('btn-force-chest').onclick=()=>{
+            state.evaluation.mptFireUnlocked=true; state.evaluation.mptWindUnlocked=true; state.evaluation.mptThunderUnlocked=true;
+            state.evaluation.mptMaxDuration=5.0;
+            playCelebration(); showFireworks();
+            const chestDiv = document.getElementById('chest-emoji');
+            chestDiv.classList.remove('animate-float');
+            chestDiv.classList.add('chest-open-animation');
+            chestDiv.innerText = '🔓📦✨';
+            document.getElementById('chest-status-text').innerText='轟！三大魔印解開！';
+            showToast('完美通關！'); speakCantonese('寶箱打開啦！');
+            setTimeout(()=>switchScreen('report'),3500);
+        };
+        document.getElementById('exportReportBtn').onclick=()=>{ exportReport(); };
+        document.getElementById('btn-restart-game').onclick=()=>location.reload();
+    };
+</script>
+</body>
+</html>
